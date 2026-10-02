@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0E1116">
+  <meta name="description" content="PluginChek inspects DAW project files in your browser and explains the plugins it can recover. Files stay local.">
+  <title>PluginChek — Circuit Drift Lab</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to analyzer</a>
+<div class="shell">
+<header class="topbar">
+  <a class="brand" href="https://djshellshoxxx.github.io/circuitdriftlabs/" target="_blank" rel="noopener noreferrer"><span class="brand-mark"></span><span>CIRCUIT <b>DRIFT</b> <small>LAB</small></span></a>
+  <div class="product-name"><strong>PluginChek</strong><span>PROJECT PLUGIN INSPECTOR</span></div>
+  <div class="header-actions"><span class="local-badge"><i></i> LOCAL ANALYSIS</span><a href="https://github.com/djshellshoxxx/pluginchek" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+</header>
+<main id="main">
+<section class="hero">
+  <div>
+    <span class="kicker">UTILITY / PROJECT FORENSICS</span>
+    <h1>See what your DAW project <em>depends on.</em></h1>
+    <p>Drop a saved project or session. PluginChek scans it locally, identifies plugin references, explains what they do, shows the evidence it found, and can compare the project against your installed plugin files.</p>
+  </div>
+  <div class="signal-panel" aria-hidden="true"><div class="scanline"></div><code>PROJECT → CONTAINER → STRINGS → PLUGINS → REPORT</code><span>NO UPLOAD / NO ACCOUNT / NO SERVER</span></div>
+</section>
+
+<section class="intake-grid">
+  <div class="panel drop-panel">
+    <div class="section-title"><span></span><div><small>01 / PROJECT INPUT</small><h2>Analyze project files</h2></div></div>
+    <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Drop DAW project files or browse">
+      <div class="drop-icon">⌁</div><strong>Drop project files here</strong><span>.als .rpp .flp .song .bwproject .cpr .npr .ptx .logicx .band .reason .zip + unknown binaries</span>
+      <button id="browseBtn" class="button primary" type="button">Browse files</button>
+      <input id="fileInput" type="file" multiple hidden>
+    </div>
+    <p class="privacy-note"><b>Local by design.</b> Files are read with browser APIs and are not uploaded by PluginChek.</p>
+  </div>
+
+  <div class="panel inventory-panel">
+    <div class="section-title"><span></span><div><small>02 / OPTIONAL CROSS-CHECK</small><h2>Installed plugin inventory</h2></div></div>
+    <p>Select your VST/AU/AAX/CLAP plugin folder, or provide an exported text/CSV file list. PluginChek compares project references against filenames and paths.</p>
+    <div class="button-row"><label class="button outline">Select plugin folder<input id="inventoryFolder" type="file" webkitdirectory multiple hidden></label><label class="button outline">Load inventory file<input id="inventoryFile" type="file" accept=".txt,.csv,.json" hidden></label></div>
+    <div id="inventoryStatus" class="mini-status">No inventory loaded</div>
+    <details class="advanced"><summary>Advanced scan options</summary><div class="advanced-grid"><label>Min string length <input id="minString" type="number" min="3" max="32" value="5"></label><label><input id="deepScan" type="checkbox" checked> Deep archive scan</label><label><input id="lowConfidence" type="checkbox" checked> Show low-confidence evidence</label><label><input id="keepEvidence" type="checkbox" checked> Keep raw evidence</label></div></details>
+  </div>
+</section>
+
+<section id="workspace" class="workspace hidden" aria-live="polite">
+  <div class="workspace-head"><div><span class="kicker">03 / ANALYSIS</span><h2>Project dependency report</h2></div><div class="button-row"><button id="copyBtn" class="button outline">Copy summary</button><button id="resetBtn" class="button danger">Reset</button></div></div>
+  <div id="riskBanner" class="risk-banner"></div>
+  <div id="summary" class="summary-grid"></div>
+
+  <div class="panel results-panel">
+    <div class="section-title"><span></span><div><small>PLUGIN REFERENCES</small><h2>Recovered plugins</h2></div></div>
+    <div class="filters"><input id="search" type="search" placeholder="Search plugin, vendor, category…"><select id="formatFilter"><option value="">All formats</option></select><select id="confidenceFilter"><option value="">All confidence</option><option>high</option><option>medium</option><option>low</option></select><select id="installedFilter"><option value="">All install states</option><option>matched</option><option>possible match</option><option>not found</option><option>inventory not supplied</option></select></div>
+    <div id="pluginList" class="plugin-list"></div>
+  </div>
+
+  <div class="split-grid">
+    <div class="panel"><div class="section-title"><span></span><div><small>FILE INSPECTOR</small><h2>What was scanned</h2></div></div><div id="fileList" class="file-list"></div></div>
+    <div class="panel"><div class="section-title"><span></span><div><small>EXPORTS</small><h2>Take the report with you</h2></div></div><p>Exports contain only analysis already in this browser session.</p><div class="export-grid"><button data-export="json" class="button primary">Export JSON</button><button data-export="csv" class="button outline">Export CSV</button><button data-export="txt" class="button outline">Export text report</button></div></div>
+  </div>
+</section>
+
+<section class="about-grid">
+  <div><span class="kicker">HOW IT WORKS</span><h2>Exact where possible. Evidence-driven everywhere else.</h2></div>
+  <p>Some DAWs store readable XML or text. Others use proprietary binary formats. PluginChek uses format-aware decoding for known containers, then falls back to printable-string and plugin-signature analysis. Each finding shows confidence and evidence so you can see what was recovered rather than trust a black box.</p>
+</section>
+</main>
+<footer><a href="https://djshellshoxxx.github.io/circuitdriftlabs/">← Circuit Drift Lab</a><span>PluginChek / browser utility / v1.0</span></footer>
+</div>
+</body>
+</html>
