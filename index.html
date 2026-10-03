@@ -40,7 +40,7 @@
 
   <div class="panel inventory-panel">
     <div class="section-title"><span></span><div><small>02 / OPTIONAL CROSS-CHECK</small><h2>Installed plugin inventory</h2></div></div>
-    <p>Select your VST/AU/AAX/CLAP plugin folder, or provide an exported text/CSV file list. PluginChek compares project references against filenames and paths.</p>
+    <p>Select your VST/AU/AAX/CLAP plugin folder, or provide an exported text/CSV/JSON file list. PluginChek compares project references against filenames and paths.</p>
     <div class="button-row"><label class="button outline">Select plugin folder<input id="inventoryFolder" type="file" webkitdirectory multiple hidden></label><label class="button outline">Load inventory file<input id="inventoryFile" type="file" accept=".txt,.csv,.json" hidden></label></div>
     <div id="inventoryStatus" class="mini-status">No inventory loaded</div>
     <details class="advanced"><summary>Advanced scan options</summary><div class="advanced-grid"><label>Min string length <input id="minString" type="number" min="3" max="32" value="5"></label><label><input id="deepScan" type="checkbox" checked> Deep archive scan</label><label><input id="lowConfidence" type="checkbox" checked> Show low-confidence evidence</label><label><input id="keepEvidence" type="checkbox" checked> Keep raw evidence</label></div></details>
@@ -60,7 +60,7 @@
 
   <div class="split-grid">
     <div class="panel"><div class="section-title"><span></span><div><small>FILE INSPECTOR</small><h2>What was scanned</h2></div></div><div id="fileList" class="file-list"></div></div>
-    <div class="panel"><div class="section-title"><span></span><div><small>EXPORTS</small><h2>Take the report with you</h2></div></div><p>Exports contain only analysis already in this browser session.</p><div class="export-grid"><button data-export="json" class="button primary">Export JSON</button><button data-export="csv" class="button outline">Export CSV</button><button data-export="txt" class="button outline">Export text report</button></div></div>
+    <div class="panel"><div class="section-title"><span></span><div><small>EXPORTS</small><h2>Take the report with you</h2></div></div><p>Exports contain only analysis already in this browser session. The recovery checklist isolates missing and uncertain dependencies after an inventory comparison.</p><div class="export-grid"><button data-export="json" class="button primary">Export JSON</button><button data-export="csv" class="button outline">Export CSV</button><button data-export="txt" class="button outline">Export text report</button><button data-export="recovery" class="button outline">Export recovery checklist</button></div></div>
   </div>
 </section>
 
