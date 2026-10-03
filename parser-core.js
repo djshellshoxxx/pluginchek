@@ -144,28 +144,36 @@ function makeFinding(rawName, ctx, evidence, explicitFormat = '') {
 export function analyzeTextForPlugins(text, ctx = {}) {
   const findings = [];
   const lines = String(text || '').split(/\r?\n/);
-  const add = (name, evidence, format = '', confidence = ctx.confidence || 'medium') => {
+  const add = (name, evidence, format = '', confidence = ctx.confidence || 'medium', seen = null) => {
     const cleaned = normalizeName(name).trim();
-    if (cleaned.length < 2 || cleaned.length > 160) return;
-    if (/^(plugin|vst3?|audio unit|aax|clap|unknown)$/i.test(cleaned)) return;
+    if (cleaned.length < 2 || cleaned.length > 160) return false;
+    if (/^(plugin|vst3?|audio unit|aax|clap|unknown)$/i.test(cleaned)) return false;
+    const candidateKey = keyFor(cleaned);
+    if (seen?.has(candidateKey)) return false;
+    seen?.add(candidateKey);
     findings.push(makeFinding(cleaned, { ...ctx, confidence }, evidence, format));
+    return true;
   };
 
+  const structuredEvidence = new Set();
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    const lineSeen = new Set();
     let m = trimmed.match(/\b(VST3?|AU|AAX|CLAP)\s*[:\-]\s*([^"'<>\r\n]{2,160})/i);
-    if (m) add(m[2].replace(/[>].*$/, '').replace(/\s+(?:preset|state|id)\s*=.*$/i, '').trim(), trimmed, m[1].toUpperCase().replace('VST', 'VST'), 'high');
+    if (m) add(m[2].replace(/[>].*$/, '').replace(/\s+(?:preset|state|id)\s*=.*$/i, '').trim(), trimmed, m[1].toUpperCase().replace('VST', 'VST'), 'high', lineSeen);
     m = trimmed.match(/<VST[^>]*?["'](?:VST3?\s*:\s*)?([^"']+)["']/i);
-    if (m) add(m[1], trimmed, inferFormat(trimmed) === 'Unknown' ? 'VST / VST3' : inferFormat(trimmed), 'high');
+    if (m) add(m[1], trimmed, inferFormat(trimmed) === 'Unknown' ? 'VST / VST3' : inferFormat(trimmed), 'high', lineSeen);
     m = trimmed.match(/(?:pluginName|plug-in|plugin|deviceName|name)\s*[=:]\s*["']([^"']{2,160})["']/i);
-    if (m && /vst|plugin|device|audio/i.test(trimmed)) add(m[1], trimmed, inferFormat(trimmed), 'medium');
+    if (m && /vst|plugin|device|audio/i.test(trimmed)) add(m[1], trimmed, inferFormat(trimmed), 'medium', lineSeen);
     m = trimmed.match(/([^\\/:*?"<>|\r\n]{2,120})\.(vst3|vst|component|aaxplugin|clap|dll)\b/i);
-    if (m) add(m[1], trimmed, inferFormat(trimmed), 'high');
+    if (m) add(m[1], trimmed, inferFormat(trimmed), 'high', lineSeen);
+    if (lineSeen.size) structuredEvidence.add(trimmed);
   }
 
   const uniqueLines = [...new Set(lines.map(x => x.trim()).filter(x => x.length >= 3 && x.length <= 220))];
   for (const line of uniqueLines) {
+    if (structuredEvidence.has(line)) continue;
     for (const [re] of KB) {
       if (re.test(line)) {
         const candidate = line
@@ -216,7 +224,7 @@ export function matchInventory(findings, inventoryPaths = []) {
   const inv = inventoryPaths.map(path => ({ path, key: keyFor(path.split(/[\\/]/).pop()) }));
   return (findings || []).map(f => {
     const key = keyFor(f.name);
-    const exact = inv.find(i => i.key === key || i.key.includes(key) || key.includes(i.key));
+    const exact = inv.find(i => i.key === key || (key.length >= 5 && i.key.length >= 5 && (i.key.includes(key) || key.includes(i.key))));
     if (exact) return { ...f, installedStatus: 'matched', inventoryMatch: exact.path };
     const tokens = normalizeName(f.name).toLowerCase().split(' ').filter(t => t.length > 2);
     const possible = inv.find(i => tokens.length >= 2 && tokens.filter(t => i.key.includes(t.replace(/[^a-z0-9]/g, ''))).length >= Math.min(2, tokens.length));
@@ -251,4 +259,55 @@ export function makeTextReport(files, findings) {
     lines.push('');
   }
   return lines.join('\n');
+}
+
+export function parseInventoryText(text, fileName = '') {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  if (/\.json$/i.test(fileName) || /^[\[{]/.test(raw)) {
+    try {
+      const parsed = JSON.parse(raw);
+      const values = [];
+      const visit = value => {
+        if (typeof value === 'string') values.push(value.trim());
+        else if (Array.isArray(value)) value.forEach(visit);
+        else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+      };
+      visit(parsed);
+      return [...new Set(values.filter(Boolean))];
+    } catch {
+      // Fall through to delimited text so malformed JSON still remains usable.
+    }
+  }
+  return [...new Set(raw.split(/\r?\n|,/).map(x => x.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean))];
+}
+
+export function makeRecoveryChecklist(findings) {
+  const unresolved = (findings || []).filter(f => f.installedStatus === 'not found' || f.installedStatus === 'possible match');
+  const missing = unresolved.filter(f => f.installedStatus === 'not found');
+  const possible = unresolved.filter(f => f.installedStatus === 'possible match');
+  const lines = [
+    'PLUGINChek RECOVERY CHECKLIST',
+    '============================',
+    '',
+    `${missing.length} missing | ${possible.length} possible match${possible.length === 1 ? '' : 'es'}`,
+    '',
+  ];
+  if (!unresolved.length) {
+    lines.push('No missing or uncertain plugin matches were found in the supplied inventory.');
+    return lines.join('\n');
+  }
+  const addSection = (title, items) => {
+    if (!items.length) return;
+    lines.push(title, '-'.repeat(title.length));
+    for (const f of [...items].sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
+      lines.push(`[ ] ${f.name} — ${f.vendor || 'Unknown vendor'} — ${f.format || 'Unknown format'}`);
+      if (f.sources?.length) lines.push(`    Project source: ${f.sources.join(', ')}`);
+      if (f.inventoryMatch) lines.push(`    Possible installed match: ${f.inventoryMatch}`);
+    }
+    lines.push('');
+  };
+  addSection('MISSING PLUGINS', missing);
+  addSection('VERIFY POSSIBLE MATCHES', possible);
+  return lines.join('\n').trimEnd();
 }
