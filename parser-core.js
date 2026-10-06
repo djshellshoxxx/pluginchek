@@ -1,3 +1,8 @@
+// PluginChek™
+// Copyright © 2026 Sheldon Davidson.
+// Licensed under the MIT License. See LICENSE.
+// SPDX-License-Identifier: MIT
+
 export const PROJECT_TYPES = [
   { exts: ['als'], daw: 'Ableton Live', container: 'gzip/XML', confidence: 'high' },
   { exts: ['rpp', 'rpp-bak'], daw: 'REAPER', container: 'text', confidence: 'high' },
