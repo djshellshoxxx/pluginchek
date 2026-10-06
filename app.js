@@ -1,3 +1,8 @@
+// PluginChek™
+// Copyright © 2026 Sheldon Davidson.
+// Licensed under the MIT License. See LICENSE.
+// SPDX-License-Identifier: MIT
+
 import {detectProjectType,extractPrintableStrings,analyzeTextForPlugins,mergePluginFindings,matchInventory,makeCsvReport,makeTextReport,parseInventoryText,makeRecoveryChecklist} from './parser-core.js';
 
 const $=s=>document.querySelector(s); const state={files:[],findings:[],inventory:[]};
