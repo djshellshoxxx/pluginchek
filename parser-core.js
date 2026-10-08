@@ -87,6 +87,7 @@ export function normalizeName(value) {
     .replace(/^(vst3?|au|aax|clap)\s*[:\-]\s*/i, '')
     .replace(/\([^)]*(?:mono|stereo|x64|x86|vst3?|au|aax|clap)[^)]*\)/ig, '')
     .replace(/_+/g, ' ')
+    .replace(/\s+(?:x64|x86|win64|win32|64[- ]?bit|32[- ]?bit)$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -111,7 +112,7 @@ export function enrichPlugin(name, vendor = '') {
   }
   let category = 'Unknown';
   let explanation = 'Audio plugin reference recovered from the project. The saved file does not expose enough standardized metadata to identify its exact purpose.';
-  if (/eq|equal/i.test(name)) category = 'EQ';
+  if (/\beq\b|equali[sz]|\bequal\b/i.test(name)) category = 'EQ';
   else if (/compress|comp\b/i.test(name)) category = 'Compressor';
   else if (/limit|maxim/i.test(name)) category = 'Limiter';
   else if (/verb|reverb|room|plate/i.test(name)) category = 'Reverb';
@@ -153,8 +154,8 @@ export function analyzeTextForPlugins(text, ctx = {}) {
     const cleaned = normalizeName(name).trim();
     if (cleaned.length < 2 || cleaned.length > 160) return false;
     if (/^(plugin|vst3?|audio unit|aax|clap|unknown)$/i.test(cleaned)) return false;
-    const candidateKey = keyFor(cleaned);
-    if (seen?.has(candidateKey)) return false;
+    const candidateKey = keyFor(cleaned.replace(/\s*\([^()]*\)\s*$/, ''));
+    if (seen && [...seen].some(k => k === candidateKey || (Math.min(k.length, candidateKey.length) >= 5 && (k.includes(candidateKey) || candidateKey.includes(k))))) return false;
     seen?.add(candidateKey);
     findings.push(makeFinding(cleaned, { ...ctx, confidence }, evidence, format));
     return true;
@@ -239,8 +240,9 @@ export function matchInventory(findings, inventoryPaths = []) {
 }
 
 function csvCell(v) {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // neutralise spreadsheet formula injection from untrusted project text
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function makeCsvReport(findings) {

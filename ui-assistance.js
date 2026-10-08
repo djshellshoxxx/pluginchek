@@ -1,5 +1,6 @@
 const storageKey=`cdl-ui-assistance:${location.pathname}:tooltips`;
-const state={tooltips:localStorage.getItem(storageKey)!=='off'};
+const store={get(){try{return localStorage.getItem(storageKey)}catch{return null}},set(v){try{localStorage.setItem(storageKey,v)}catch{}}};
+const state={tooltips:store.get()!=='off'};
 const interactive='button,input:not([type="hidden"]),select,textarea,a[href],[role="button"],[tabindex]:not([tabindex="-1"])';
 const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
 const esc=v=>String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -51,7 +52,7 @@ function renderHelp(d){
 }
 function renderOptions(d){
  const b=d.querySelector('.cdl-help-body');b.innerHTML=`<fieldset><legend>Interface assistance</legend><label class="cdl-tooltip-option"><input id="cdlTooltipToggle" type="checkbox" ${state.tooltips?'checked':''}> Show tooltips</label><p>When enabled, hovering over an interactive control shows a short description. This preference is saved in this browser.</p></fieldset>`;
- b.querySelector('#cdlTooltipToggle').addEventListener('change',e=>{state.tooltips=e.target.checked;localStorage.setItem(storageKey,state.tooltips?'on':'off');applyTooltips()});
+ b.querySelector('#cdlTooltipToggle').addEventListener('change',e=>{state.tooltips=e.target.checked;store.set(state.tooltips?'on':'off');applyTooltips()});
 }
 function host(){return document.querySelector('.app-actions,.header-actions,.actions,header nav,header .controls,header')||document.body}
 function action(id,label){let b=document.getElementById(id);if(b)return b;b=document.createElement('button');b.type='button';b.id=id;b.textContent=label;b.dataset.uiAssistance='true';host().append(b);return b}

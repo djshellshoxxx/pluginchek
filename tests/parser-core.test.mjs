@@ -93,3 +93,21 @@ test('builds a recovery checklist containing missing and possible matches only',
   assert.match(text, /1 missing/);
   assert.match(text, /1 possible match/);
 });
+
+import { makeCsvReport as _csv, enrichPlugin as _enrich } from '../parser-core.js';
+test('CSV export neutralises formula injection', () => {
+  const out = _csv([{ name: '=HYPERLINK("x")', vendor: '@v', format: 'VST3', category: 'EQ', confidence: 'high', occurrences: 1, installedStatus: 'x', explanation: 'e' }]);
+  assert.ok(out.includes(`"'=HYPERLINK(""x"")"`));
+  assert.ok(out.includes(",'@v,"));
+});
+test('EQ heuristic does not match words merely containing "eq"', () => {
+  assert.equal(_enrich('Frequency Shifter').category, 'Unknown');
+  assert.equal(_enrich('Super EQ').category, 'EQ');
+});
+
+import { analyzeTextForPlugins as _an, mergePluginFindings as _mg } from '../parser-core.js';
+test('one REAPER VST line yields one plugin (no filename/arch duplicates)', () => {
+  const t = '<VST "VST3: Pro-Q 3 (FabFilter)" FabFilter_Pro-Q_3.vst3 0\n<VST "VST: Serum (Xfer Records)" Serum_x64.dll 0';
+  const names = _mg(_an(t, { source: 't', daw: 'REAPER', confidence: 'high' })).map(f => f.name);
+  assert.equal(names.length, 2, names.join(' | '));
+});
