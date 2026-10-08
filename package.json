@@ -1,7 +1,31 @@
 {
   "name": "pluginchek",
-  "version": "1.0.0",
+  "productName": "PluginChek",
+  "version": "0.1.0-beta.1",
+  "description": "Local DAW project plugin inspector",
+  "author": "Sheldon Davidson",
+  "license": "MIT",
   "private": true,
   "type": "module",
-  "scripts": {"test": "node --test tests/*.test.mjs", "check": "node --check parser-core.js && node --check app.js"}
+  "main": "desktop/main.js",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check parser-core.js && node --check app.js && node --check ui-assistance.js && node --check desktop/main.js",
+    "start": "electron .",
+    "dist:linux": "electron-builder --linux AppImage tar.gz",
+    "dist:win": "electron-builder --win portable nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.circuitdriftlabs.pluginchek",
+    "productName": "PluginChek",
+    "files": ["index.html", "app.js", "parser-core.js", "ui-assistance.js", "styles.css", "desktop/**", "LICENSE", "package.json"],
+    "directories": { "output": "dist" },
+    "artifactName": "PluginChek-${version}-${os}-${arch}.${ext}",
+    "linux": { "category": "AudioVideo", "maintainer": "Sheldon Davidson <sheldon.davidson@gmail.com>" },
+    "win": { "target": ["portable", "nsis"] }
+  }
 }
