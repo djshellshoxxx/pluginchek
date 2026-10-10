@@ -25,11 +25,12 @@ export function computeVerdict(findings, { inventoryLoaded = false, media = [] }
   } else if (c.missing || c.possible || c.lowConfidence) {
     level = 'attention';
     headline = `${plural(c.total, 'plugin')} found; ${c.matched} installed; ${c.possible + c.missing} need${c.possible + c.missing === 1 ? 's' : ''} checking.`;
-  } else { level = 'ready'; headline = `All ${plural(c.total, 'plugin')} found on this computer.`; }
+  } else if (missingMedia) { level = 'attention'; headline = `All ${plural(c.total, 'plugin')} found, but ${plural(missingMedia, 'audio/sample file')} could not be found.`; }
+  else { level = 'ready'; headline = `All ${plural(c.total, 'plugin')} found on this computer.`; }
   const details = [];
   if (c.stock) details.push(`${plural(c.stock, 'built-in device')} not counted.`);
   if (c.lowConfidence) details.push(`${c.lowConfidence} low-confidence result${c.lowConfidence === 1 ? '' : 's'} came from a text scan, not structured project data.`);
-  if (missingMedia) details.push(`${plural(missingMedia, 'audio/sample file')} could not be found.`);
+  if (missingMedia && level !== 'attention') details.push(`${plural(missingMedia, 'audio/sample file')} could not be found.`);
   return { level, headline, counts: c, details, missingMedia };
 }
 

@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: MIT
 
 // Tolerant streaming XML tokenizer (no DOM; works in browser, Worker and Node).
-const TAG = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<[?!][^>]*>|<(\/?)([A-Za-z_][\w.:-]*)((?:\s+[\w.:-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/g;
 const ATTR = /([\w.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
@@ -24,22 +23,40 @@ function parseAttrs(src) {
   return out;
 }
 
+const NAME = /^(\/?)([A-Za-z_][\w.:-]*)([\s\S]*?)(\/?)$/;
+const MAX_TAG = 65536;
+
 /**
  * Walk tags. open(tag, attrs, stack) / close(tag, stack): `stack` holds ancestors only (excludes current tag).
- * Throws if maxTags is exceeded so hostile files cannot hang the UI.
+ * Linear-time: every skip uses indexOf, never a backtracking regex, so crafted input cannot stall the UI.
+ * Throws if maxTags/maxDepth is exceeded.
  */
 export function scanXml(text, { open, close, maxTags = 6_000_000, maxDepth = 512 } = {}) {
   const stack = [];
-  let n = 0, m;
-  TAG.lastIndex = 0;
-  while ((m = TAG.exec(text))) {
-    if (m[2] === undefined) continue;
+  let n = 0, i = 0;
+  const len = text.length;
+  while ((i = text.indexOf('<', i)) !== -1) {
+    const c = text.charCodeAt(i + 1);
+    if (c === 33 /* ! */ && text.startsWith('<!--', i)) { const e = text.indexOf('-->', i + 4); if (e < 0) break; i = e + 3; continue; }
+    if (c === 33 && text.startsWith('<![CDATA[', i)) { const e = text.indexOf(']]>', i + 9); if (e < 0) break; i = e + 3; continue; }
+    if (c === 63 /* ? */ || c === 33) { const e = text.indexOf('>', i + 2); if (e < 0) break; i = e + 1; continue; }
+    // find the closing '>' while ignoring any '>' inside quoted attribute values
+    let e = i + 1, quote = 0;
+    for (; e < len && e - i < MAX_TAG; e++) {
+      const ch = text.charCodeAt(e);
+      if (ch === 60) break; // '<' can never appear inside a tag: stop here so every character is scanned at most once
+      if (quote) { if (ch === quote) quote = 0; } else if (ch === 34 || ch === 39) quote = ch; else if (ch === 62) break;
+    }
+    if (e >= len || e - i >= MAX_TAG || text.charCodeAt(e) !== 62) { i = Math.max(i + 1, e); continue; } // unterminated / oversized: resume at the stopping point
+    const m = NAME.exec(text.slice(i + 1, e));
+    i = e + 1;
+    if (!m) continue;
     if (++n > maxTags) throw new Error('XML tag limit exceeded');
     const tag = m[2];
-    if (m[1]) { // closing tag: pop to the matching open tag if present
-      const i = stack.lastIndexOf(tag);
-      if (i < 0) continue;
-      stack.length = i;
+    if (m[1]) {
+      const k = stack.lastIndexOf(tag);
+      if (k < 0) continue;
+      stack.length = k;
       close?.(tag, stack);
     } else {
       open?.(tag, parseAttrs(m[3]), stack);

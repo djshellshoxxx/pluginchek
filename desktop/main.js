@@ -15,6 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT_EXT = /\.(als|rpp|rpp-bak|flp|song|bwproject|cpr|npr|ptx|pts|logicx|band|reason|zip)$/i;
 const MAX_READ = 400 * 1024 * 1024;
 const allowedDirs = new Set(), allowedFiles = new Set();
+const pendingOpen = []; // macOS open-file events that arrive before the window exists
 let win = null;
 
 // ES modules are blocked on file://, so serve the static site through a privileged app:// scheme.
@@ -67,7 +68,9 @@ function registerIpc() {
   });
   ipcMain.handle('fs:exists', async (_e, paths) => {
     if (!Array.isArray(paths) || paths.length > 20000) return [];
-    return Promise.all(paths.map(async p => { try { return typeof p === 'string' && path.isAbsolute(p) && !!(await fs.stat(p)) ; } catch { return false; } }));
+    // Never stat UNC / network / device paths: touching \\host\share on Windows starts an SMB login and leaks credentials.
+    const safe = p => typeof p === 'string' && p.length < 4096 && path.isAbsolute(p) && !/^(\\\\|\/\/)/.test(p) && !p.includes('\0');
+    return Promise.all(paths.map(async p => { try { return safe(p) && !!(await fs.stat(p)); } catch { return false; } }));
   });
   ipcMain.handle('app:version', () => app.getVersion());
 }
@@ -75,7 +78,7 @@ function registerIpc() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', (_e, argv) => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } sendOpenFiles(projectArgs(argv)); });
-  app.on('open-file', (e, p) => { e.preventDefault(); if (PROJECT_EXT.test(p)) { if (app.isReady()) sendOpenFiles([path.resolve(p)]); else allowedFiles.add(path.resolve(p)); } });
+  app.on('open-file', (e, p) => { e.preventDefault(); if (PROJECT_EXT.test(p)) { if (app.isReady() && win) sendOpenFiles([path.resolve(p)]); else pendingOpen.push(path.resolve(p)); } });
   app.whenReady().then(() => {
     protocol.handle('app', req => {
       const full = resolveIn(root, new URL(req.url).pathname);
@@ -84,7 +87,7 @@ else {
     session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
     registerIpc();
     createWindow();
-    sendOpenFiles(projectArgs(process.argv));
+    sendOpenFiles([...projectArgs(process.argv), ...pendingOpen.splice(0)]);
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); });
   });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

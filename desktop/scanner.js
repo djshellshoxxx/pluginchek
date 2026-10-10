@@ -73,7 +73,7 @@ export async function listProjects(dir, { maxDepth = 8, maxFiles = 20_000, fsx =
     try { ents = await fsx.readdir(d, { withFileTypes: true }); } catch { return; }
     for (const e of ents) {
       const full = path.join(d, e.name);
-      if (e.isDirectory()) { if (!/^(backup|\.git|node_modules)$/i.test(e.name) && !e.name.toLowerCase().endsWith('.logicx')) await walk(full, depth + 1); else if (e.name.toLowerCase().endsWith('.logicx')) out.push({ path: full, size: 0, package: true }); }
+      if (e.isDirectory()) { if (!/^(backup|\.git|node_modules)$/i.test(e.name) && !e.name.toLowerCase().endsWith('.logicx')) await walk(full, depth + 1); } // .logicx packages are directories and cannot be read as one file
       else if (e.isFile() && PROJECT_EXT.has(path.extname(e.name).toLowerCase())) {
         try { out.push({ path: full, size: (await fsx.stat(full)).size }); } catch { /* vanished */ }
       }

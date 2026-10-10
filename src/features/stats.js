@@ -5,6 +5,7 @@
 
 // F10: usage statistics over many per-project reports.
 import { keyOf } from '../core/merge.js';
+import { csvCell } from '../core/csv.js';
 
 const bump = (m, k, n = 1) => m.set(k, (m.get(k) || 0) + n);
 const top = (m, n = 10) => [...m.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]))).slice(0, n);
@@ -38,4 +39,4 @@ export function unusedInstalled(inventoryPaths, reports) {
   return inventoryPaths.filter(p => !used.has(typeof p === 'string' ? p : p.path));
 }
 
-export const statsCsv = s => ['Plugin,Vendor,Projects,Instances', ...s.plugins.map(p => [p.name, p.vendor, p.projects, p.instances].map(v => { let t = String(v ?? ''); if (/^[=+\-@]/.test(t)) t = `'${t}`; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }).join(','))].join('\n');
+export const statsCsv = s => ['Plugin,Vendor,Projects,Instances', ...s.plugins.map(p => [p.name, p.vendor, p.projects, p.instances].map(csvCell).join(','))].join('\n');

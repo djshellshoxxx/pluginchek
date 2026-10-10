@@ -18,15 +18,18 @@ const CHANNELS = /^(?:\d+\s*(?:out|in|ch)|mono|stereo|x64|x86|64[- ]?bit)/i;
 
 /** "VST3: Pro-Q 3 (FabFilter)" -> {fmt, name, vendor} */
 export function parseDisplay(display) {
-  const m = /^(VST3?i?|AUi?|CLAPi?|DXi?):\s*(.*)$/i.exec(display.trim());
+  const m = /^(VST3?i?|AUi?|CLAPi?|DXi?):\s*([^\n]*)$/i.exec(display.slice(0, 1000).trim());
   if (!m) return null;
   let name = m[2].trim(), vendor = '';
-  for (let i = 0; i < 3; i++) {
-    const g = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(name);
-    if (!g) break;
-    name = g[1].trim();
-    if (CHANNELS.test(g[2].trim())) continue;
-    vendor = g[2].trim();
+  for (let i = 0; i < 3; i++) { // peel trailing "(...)" groups with indexOf (no backtracking regex)
+    if (!name.endsWith(')')) break;
+    const open = name.lastIndexOf('(');
+    if (open < 0) break;
+    const inner = name.slice(open + 1, -1);
+    if (inner.includes(')') || inner.includes('(')) break;
+    name = name.slice(0, open).trimEnd();
+    if (CHANNELS.test(inner.trim())) continue;
+    vendor = inner.trim();
     break;
   }
   const k = m[1].toUpperCase().replace(/I$/, '');
@@ -54,7 +57,7 @@ export const reaper = {
     const stack = [];
     let track = '', version = '';
     for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
+      const line = raw.length > 4096 ? raw.slice(0, 4096).trim() : raw.trim(); // state blobs and hostile lines are capped
       if (!line) continue;
       if (line === '>') { const b = stack.pop(); if (b === 'TRACK') track = ''; continue; }
       if (line[0] === '<') {

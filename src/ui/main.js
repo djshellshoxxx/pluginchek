@@ -7,7 +7,7 @@ import { analyzeBytes } from '../core/pipeline.js';
 import { mergeFindings, keyOf } from '../core/merge.js';
 import { makeReport, migrateV1ToV2 } from '../core/schema.js';
 import { defaultDb as db } from '../core/db.js';
-import { matchInventory } from '../core/inventory.js';
+import { matchInventory, pluginPathsFromFiles } from '../core/inventory.js';
 import { parseInventoryText, makeCsvReport, makeTextReport, makeRecoveryChecklist } from '../../parser-core.js';
 import { resolveMedia, candidatePaths, summarizeMedia, makeMediaCsv } from '../features/media.js';
 import { computeVerdict, isProblem } from '../features/verdict.js';
@@ -23,6 +23,8 @@ import { makeProjectCard } from './card.js';
 
 const MAX_READ = 400 * 1024 * 1024;
 const bridge = window.pluginchek || null; // desktop preload API (undefined in the browser)
+let chain = Promise.resolve(); // serialise ingestion so concurrent opens cannot clobber state.ac
+const enqueue = fn => (chain = chain.then(fn, fn));
 const state = { reports: [], findings: [], media: [], inventory: [], projectFiles: [], snapshot: null, target: { os: 'win', arch: 'x64' }, ac: null };
 
 /* ---------- derived data ---------- */
@@ -30,7 +32,7 @@ function recompute() {
   const all = state.reports.flatMap(r => r.findings);
   state.findings = matchInventory(mergeFindings(all), state.inventory, { db });
   const media = new Map();
-  for (const r of state.reports) for (const m of r.media) { const k = m.kind + '|' + m.path; if (!media.has(k) || m.status !== 'unchecked') media.set(k, m); }
+  for (const r of state.reports) for (const m of r.media) { const k = `${m.source}|${m.kind}|${m.path}`; if (!media.has(k) || m.status !== 'unchecked') media.set(k, m); }
   const list = [...media.values()];
   state.media = state.projectFiles.length ? resolveMedia(list, state.projectFiles) : list; // a chosen project folder overrides desktop existence checks
   render();
@@ -51,15 +53,27 @@ async function ingest(name, size, bytes, { path = '', truncated = false } = {}) 
   res.rec.path = path;
   if (bridge?.fsExists && res.media.length) {
     const cands = candidatePaths(res.media, path ? dirOf(path) : '');
-    const ex = cands.some(Boolean) ? await bridge.fsExists(cands.filter(Boolean)) : [];
-    let i = 0;
-    res.media = res.media.map((m, idx) => (cands[idx] ? { ...m, status: ex[i++] ? 'present' : 'missing' } : m));
+    const ex = cands.some(Boolean) ? await existsChunked(cands.filter(Boolean)) : null;
+    if (ex) { let i = 0; res.media = res.media.map((m, idx) => (cands[idx] ? { ...m, status: ex[i++] ? 'present' : 'missing' } : m)); }
   }
   void s;
   state.reports.push(res);
 }
 
-async function handleFiles(files, opts = {}) {
+async function existsChunked(paths) {
+  const out = [];
+  for (let i = 0; i < paths.length; i += 10000) {
+    const part = paths.slice(i, i + 10000), r = await bridge.fsExists(part);
+    if (!Array.isArray(r) || r.length !== part.length) return null; // refuse to guess: leave media unchecked
+    out.push(...r);
+  }
+  return out;
+}
+
+const handleFiles = files => enqueue(() => runFiles(files));
+const handlePaths = paths => enqueue(() => runPaths(paths));
+
+async function runFiles(files) {
   if (!files.length) return;
   $('#workspace').classList.remove('hidden');
   state.ac = new AbortController();
@@ -84,7 +98,7 @@ async function handleFiles(files, opts = {}) {
   recompute();
 }
 
-async function handlePaths(paths) { // desktop: files opened from the OS / batch folder
+async function runPaths(paths) { // desktop: files opened from the OS / batch folder
   $('#workspace').classList.remove('hidden');
   state.ac = new AbortController();
   let n = 0;
@@ -93,7 +107,7 @@ async function handlePaths(paths) { // desktop: files opened from the OS / batch
       if (state.ac.signal.aborted) break;
       const name = p.path.split(/[\\/]/).pop();
       showProgress(true, `${n + 1}/${paths.length} ${name}`, Math.round((n / paths.length) * 100));
-      try { const bytes = await bridge.readFile(p.path); await ingest(name, p.size ?? bytes.length, bytes, { path: p.path }); }
+      try { const bytes = await bridge.readFile(p.path); await ingest(name, p.size ?? bytes.length, bytes, { path: p.path, truncated: (p.size || 0) > MAX_READ }); }
       catch (err) { if (err.name === 'AbortError') break; state.reports.push({ rec: { name, size: p.size || 0, daw: 'Unknown', container: 'unreadable', confidence: 'low', notes: [`Could not analyze file: ${err.message}`], members: 0 }, findings: [], media: [] }); }
       n++;
       if (n % 10 === 0) recompute();
@@ -124,7 +138,7 @@ function render() {
   if (v.level !== 'ready' && $('#problemsOnly') && !state.problemsTouched && state.inventory.length && v.level !== 'unknown') $('#problemsOnly').checked = true;
   $('#riskBanner').textContent = state.reports.some(r => /binary|unknown/i.test(r.rec.container) && r.rec.parser === 'legacy-strings') ? 'One or more files use proprietary/opaque binary storage, so those results are heuristic.' : '';
   $('#riskBanner').classList.toggle('hidden', !$('#riskBanner').textContent);
-  renderFiles(); populateFormats(); renderPlugins(); renderMedia(); renderCompat(); renderStats(); renderFun();
+  renderFiles(); populateFormats(); renderPlugins(); renderMedia(); renderCompat(); renderStats(); renderFun(); renderDiff();
 }
 
 function populateFormats() {
@@ -201,11 +215,18 @@ function exportReport() { return makeReport({ files: state.reports.map(r => r.re
 const dawName = () => state.reports[0]?.rec.daw || 'DAW';
 
 function reset() {
+  state.ac?.abort(); // stop any running ingest before clearing
   const backup = { reports: state.reports, inventory: state.inventory, projectFiles: state.projectFiles };
   state.reports = []; state.findings = []; state.media = []; state.inventory = []; state.projectFiles = [];
+  state.snapshot = null; state.diff = null; $('#diffOut').innerHTML = ''; $('#diffMdBtn').classList.add('hidden');
   $('#workspace').classList.add('hidden'); $('#inventoryStatus').textContent = 'No inventory loaded';
-  for (const id of ['#fileInput', '#inventoryFolder', '#inventoryFile', '#projectFolder']) $(id).value = '';
-  if (backup.reports.length) toast('Report cleared.', 'Undo', () => { Object.assign(state, backup); $('#workspace').classList.remove('hidden'); recompute(); });
+  for (const id of ['#fileInput', '#inventoryFolder', '#inventoryFile', '#projectFolder', '#snapFile']) $(id).value = '';
+  if (backup.reports.length) toast('Report cleared.', 'Undo', () => {
+    state.reports = [...backup.reports, ...state.reports]; // keep anything analysed since the reset
+    if (!state.inventory.length) { state.inventory = backup.inventory; $('#inventoryStatus').textContent = `${backup.inventory.length} inventory entries restored`; }
+    if (!state.projectFiles.length) state.projectFiles = backup.projectFiles;
+    $('#workspace').classList.remove('hidden'); recompute();
+  });
 }
 
 function setInventory(items, label) {
@@ -231,7 +252,7 @@ function bind() {
   for (const ev of ['dragover', 'drop']) window.addEventListener(ev, e => e.preventDefault()); // never navigate away on a stray drop
   $('#cancelBtn').onclick = () => state.ac?.abort();
 
-  $('#inventoryFolder').onchange = e => setInventory([...e.target.files].map(f => f.webkitRelativePath || f.name).filter(p => /\.(vst3|vst|component|aaxplugin|clap|dll)$/i.test(p)), 'plugin files indexed locally');
+  $('#inventoryFolder').onchange = e => setInventory(pluginPathsFromFiles([...e.target.files].map(f => f.webkitRelativePath || f.name)), 'plugins indexed locally');
   $('#inventoryFile').onchange = async e => { const f = e.target.files[0]; if (f) setInventory(parseInventoryText(await f.text(), f.name), 'inventory entries loaded locally'); };
   $('#projectFolder').onchange = e => { state.projectFiles = [...e.target.files].map(f => f.webkitRelativePath || f.name); recompute(); };
 
@@ -295,9 +316,9 @@ function bind() {
     $('#scanPcBtn').onclick = async () => {
       $('#inventoryStatus').textContent = 'Scanning installed plugins…';
       const r = await bridge.scanInventory();
-      setInventory(r.items, `installed plugins found${r.notes?.length ? ` (${r.notes.length} folders skipped)` : ''}`);
+      setInventory(r.items, `installed plugins found${r.notes?.length ? ` (${r.notes.length} folders skipped)` : ''}${r.truncated ? ' — scan limit reached, results may be incomplete' : ''}`);
     };
-    $('#batchBtn').onclick = async () => { const dir = await bridge.pickFolder(); if (dir) { const files = await bridge.listProjects(dir); if (files.length) handlePaths(files); else toast('No project files found in that folder.'); } };
+    $('#batchBtn').onclick = async e => { e.stopPropagation(); const dir = await bridge.pickFolder(); if (dir) { const files = await bridge.listProjects(dir); if (files.length) handlePaths(files); else toast('No project files found in that folder.'); } };
     bridge.onOpenFiles?.(async paths => handlePaths(await Promise.all(paths.map(async p => ({ path: p })))));
   }
 }

@@ -28,19 +28,19 @@ const KB = [
   [/fabfilter\s*saturn/i, 'FabFilter', 'Distortion / Saturation', 'Multiband saturation and distortion processor for harmonic colour and sound design.'],
   [/valhalla.*(vintage|room|plate|verb)/i, 'Valhalla DSP', 'Reverb', 'Algorithmic reverb for ambience, room and long-tail spatial effects.'],
   [/valhalla.*delay/i, 'Valhalla DSP', 'Delay', 'Creative delay processor for echoes, modulation and time-based effects.'],
-  [/serum/i, 'Xfer Records', 'Instrument / Synth', 'Wavetable synthesizer used to create melodic, bass, pad and effect sounds.'],
-  [/vital/i, 'Vital Audio', 'Instrument / Synth', 'Wavetable synthesizer with modulation and spectral processing.'],
-  [/massive(\s*x)?/i, 'Native Instruments', 'Instrument / Synth', 'Software synthesizer for basses, leads, pads and sound design.'],
+  [/\bserum\b/i, 'Xfer Records', 'Instrument / Synth', 'Wavetable synthesizer used to create melodic, bass, pad and effect sounds.'],
+  [/\bvital\b/i, 'Vital Audio', 'Instrument / Synth', 'Wavetable synthesizer with modulation and spectral processing.'],
+  [/\bmassive(\s*x)?\b/i, 'Native Instruments', 'Instrument / Synth', 'Software synthesizer for basses, leads, pads and sound design.'],
   [/kontakt/i, 'Native Instruments', 'Sampler', 'Software sampler and sample-library host.'],
   [/reaktor/i, 'Native Instruments', 'Instrument / Modular', 'Modular DSP environment hosting instruments and effects.'],
   [/ozone/i, 'iZotope', 'Mastering', 'Mastering suite for EQ, dynamics, imaging, limiting and analysis.'],
   [/neutron/i, 'iZotope', 'Channel Strip / Mixing', 'Mixing suite combining EQ, dynamics, transient and masking tools.'],
-  [/rx\s*\d*/i, 'iZotope', 'Repair / Utility', 'Audio repair and restoration processor.'],
+  [/\brx\s*\d{0,2}\b/i, 'iZotope', 'Repair / Utility', 'Audio repair and restoration processor.'],
   [/soundtoys/i, 'Soundtoys', 'Creative Effect', 'Creative effects family covering saturation, delay, modulation, pitch and filtering.'],
   [/decapitator/i, 'Soundtoys', 'Distortion / Saturation', 'Analog-style saturation and distortion effect.'],
   [/echoboy/i, 'Soundtoys', 'Delay', 'Character delay and echo processor.'],
   [/little alterboy/i, 'Soundtoys', 'Pitch / Voice', 'Pitch and formant manipulation effect.'],
-  [/waves/i, 'Waves', 'Mixing / Utility', 'Waves audio plugin; exact function depends on the specific plugin name recovered.'],
+  [/\bwaves\b/i, 'Waves', 'Mixing / Utility', 'Waves audio plugin; exact function depends on the specific plugin name recovered.'],
   [/arturia/i, 'Arturia', 'Instrument / Effect', 'Arturia software instrument or effect; exact role depends on the recovered product name.'],
   [/amplitube/i, 'IK Multimedia', 'Amp / Guitar', 'Guitar and bass amplifier, cabinet and effects modeling environment.'],
   [/guitar rig/i, 'Native Instruments', 'Amp / Guitar', 'Guitar/bass amp, cabinet and multi-effect processor.'],
@@ -163,12 +163,12 @@ export function analyzeTextForPlugins(text, ctx = {}) {
 
   const structuredEvidence = new Set();
   for (const line of lines) {
-    const trimmed = line.trim();
+    const trimmed = line.trim().slice(0, 2000); // cap per-line work so hostile lines cannot stall the regexes
     if (!trimmed) continue;
     const lineSeen = new Set();
     let m = trimmed.match(/\b(VST3?|AU|AAX|CLAP)\s*[:\-]\s*([^"'<>\r\n]{2,160})/i);
     if (m) add(m[2].replace(/[>].*$/, '').replace(/\s+(?:preset|state|id)\s*=.*$/i, '').trim(), trimmed, m[1].toUpperCase().replace('VST', 'VST'), 'high', lineSeen);
-    m = trimmed.match(/<VST[^>]*?["'](?:VST3?\s*:\s*)?([^"']+)["']/i);
+    m = trimmed.match(/<VST[^>]{0,200}?["'](?:VST3?\s*:\s*)?([^"']+)["']/i);
     if (m) add(m[1], trimmed, inferFormat(trimmed) === 'Unknown' ? 'VST / VST3' : inferFormat(trimmed), 'high', lineSeen);
     m = trimmed.match(/(?:pluginName|plug-in|plugin|deviceName|name)\s*[=:]\s*["']([^"']{2,160})["']/i);
     if (m && /vst|plugin|device|audio/i.test(trimmed)) add(m[1], trimmed, inferFormat(trimmed), 'medium', lineSeen);
@@ -188,7 +188,7 @@ export function analyzeTextForPlugins(text, ctx = {}) {
           .replace(/\s+/g, ' ')
           .slice(0, 120)
           .trim();
-        if (candidate) add(candidate, line, inferFormat(line), 'medium');
+        if (candidate) add(candidate, line, inferFormat(line), ctx.confidence === 'low' ? 'low' : 'medium');
         break;
       }
     }

@@ -68,7 +68,7 @@ export async function analyzeBytes(name, size, bytes, opts = {}) {
       if (gzFailed) strings(bytes, name);
       else if (isGzip(bytes)) chunks.push({ source: name, text: decodeText(payload), confidence: 'high' });
       else if (isZip(bytes) || /\.(song|zip|logicx|band)$/i.test(name)) {
-        const entries = deepScan ? await unzipTextEntries(bytes) : [];
+        const entries = deepScan ? await unzipTextEntries(bytes, { signal }) : [];
         rec.members = entries.length;
         for (const e of entries) chunks.push({ source: `${name} › ${e.name}`, text: e.text, confidence: 'high' });
         rec.notes.push(deepScan ? (entries.length ? `${entries.length} textual archive members inspected.` : 'Archive/container detected; no readable textual members recovered.') : 'Deep archive scan disabled; container scanned using printable strings only.');

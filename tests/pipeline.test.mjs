@@ -263,3 +263,89 @@ test('desktop: project listing filters by extension', async () => {
   const fsx = virtualFs({ '/p': [['a.als', 'file'], ['b.txt', 'file'], ['Backup', 'dir'], ['sub', 'dir']], '/p/sub': [['c.rpp', 'file']], '/p/Backup': [['d.als', 'file']] });
   assert.deepEqual((await listProjects('/p', { fsx })).map(x => x.path.split('/').pop()).sort(), ['a.als', 'c.rpp']);
 });
+
+// ---------- audit regressions ----------
+import { deflateRawSync } from 'node:zlib';
+import { unzipTextEntries } from '../src/core/zip.js';
+import { candidatePaths, isUnsafePath } from '../src/features/media.js';
+import { pluginPathsFromFiles } from '../src/core/inventory.js';
+import { statsCsv } from '../src/features/stats.js';
+import { analyzeTextForPlugins } from '../parser-core.js';
+
+const timed = fn => { const t = Date.now(); fn(); return Date.now() - t; };
+
+test('audit: XML scanner is linear on unterminated comment/PI/CDATA floods', () => {
+  for (const s of ['<?', '<!--', '<![CDATA[', '<a ', '<a b="', '<!']) assert.ok(timed(() => scanXml(s.repeat(100_000), {})) < 500, s);
+  const seen = [];
+  scanXml('<a x=">"><b/></a>', { open: t => seen.push(t) });
+  assert.deepEqual(seen, ['a', 'b']); // '>' inside a quoted attribute value is handled
+});
+
+test('audit: REAPER display parsing and legacy VST regex are linear on hostile lines', async () => {
+  assert.ok(timed(() => parseDisplay('VST: x' + ' '.repeat(200_000) + '(a)')) < 500);
+  assert.ok(timed(() => parseDisplay('VST: ' + '('.repeat(200_000))) < 500);
+  assert.ok(timed(() => analyzeTextForPlugins('<VST'.repeat(100_000), { source: 's', daw: 'x', confidence: 'low' })) < 1500);
+  assert.deepEqual(parseDisplay('VST3: Pro-Q 3 (FabFilter)'), { fmt: 'VST3', name: 'Pro-Q 3', vendor: 'FabFilter' });
+});
+
+function zipWith(entries, { overlap = false } = {}) {
+  const locals = [], centrals = [];
+  let off = 0;
+  for (const [name, data] of entries) {
+    const comp = deflateRawSync(data), nm = Buffer.from(name);
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(8, 8); lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26);
+    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(8, 10); ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(nm.length, 28); ch.writeUInt32LE(overlap ? 0 : off, 42);
+    centrals.push(Buffer.concat([ch, nm]));
+    if (!overlap || locals.length === 0) { locals.push(Buffer.concat([lh, nm, comp])); off += lh.length + nm.length + comp.length; }
+  }
+  const cd = Buffer.concat(centrals), eo = Buffer.alloc(22);
+  eo.writeUInt32LE(0x06054b50, 0); eo.writeUInt16LE(entries.length, 10); eo.writeUInt32LE(cd.length, 12); eo.writeUInt32LE(off, 16);
+  return new Uint8Array(Buffer.concat([...locals, cd, eo]));
+}
+
+test('audit: zip reader rejects overlapping entries, enforces total budget, honours abort', async () => {
+  const data = Buffer.alloc(2_000_000, 0x41);
+  const overlapped = zipWith(Array.from({ length: 20 }, (_, i) => [`m${i}.xml`, data]), { overlap: true });
+  assert.equal((await unzipTextEntries(overlapped)).length, 1);
+  const many = zipWith(Array.from({ length: 10 }, (_, i) => [`m${i}.xml`, data]));
+  const out = await unzipTextEntries(many, { maxTotalBytes: 5_000_000 });
+  assert.ok(out.length >= 1 && out.length <= 3, `got ${out.length}`);
+  await assert.rejects(() => unzipTextEntries(many, { signal: { aborted: true } }), /cancelled/i);
+});
+
+test('audit: UNC and network paths are never candidates for existence checks', () => {
+  assert.ok(isUnsafePath('\\\\attacker\\share\\x.wav') && isUnsafePath('//host/x'));
+  const m = [{ absPath: '\\\\attacker\\share\\x.wav', relPath: '' }, { absPath: '', relPath: 'a/b.wav' }, { absPath: '/ok/c.wav', relPath: '' }];
+  assert.deepEqual(candidatePaths(m, '/proj'), ['', '/proj/a/b.wav', '/ok/c.wav']);
+  assert.deepEqual(candidatePaths([{ absPath: '', relPath: 'a.wav' }], '\\\\srv\\share'), ['']);
+});
+
+test('audit: opaque-binary text matches stay low confidence and KB patterns are word-anchored', async () => {
+  const bytes = new TextEncoder().encode(['kRxBufferSize', 'Marxism_config', 'CrossFadeWavesPreset_v2', 'Service_Vitality', 'Serum'].map(s => '\0\0\0' + s + '\0\0\0').join(''));
+  const r = await analyzeBytes('x.cpr', bytes.length, bytes);
+  assert.deepEqual(r.findings.map(f => f.name), ['Serum']);
+  assert.equal(r.findings[0].confidence, 'low');
+});
+
+test('audit: web folder picker finds bundle plugins on macOS/Linux/Windows', () => {
+  const got = pluginPathsFromFiles(['VST3/Foo.vst3/Contents/MacOS/Foo', 'VST3/Foo.vst3/Contents/Info.plist', 'Components/Bar.component/Contents/MacOS/Bar', 'vst3/Baz.vst3/Contents/x86_64-linux/Baz.so', 'W/Qux.dll', 'W\\Old.vst3', 'readme.txt']);
+  assert.deepEqual(got.sort(), ['Components/Bar.component', 'VST3/Foo.vst3', 'W/Old.vst3', 'W/Qux.dll', 'vst3/Baz.vst3'].sort());
+});
+
+test('audit: verdict is not "ready" with missing media; csv neutralises tab; share redact toggle', () => {
+  const ok = { ...F('P'), installed: { status: 'matched' } };
+  const v = computeVerdict([ok], { inventoryLoaded: true, media: [{ status: 'missing' }] });
+  assert.equal(v.level, 'attention'); assert.match(v.headline, /could not be found/);
+  assert.ok(statsCsv({ plugins: [{ name: '\t=1+1', vendor: '', projects: 1, instances: 1 }] }).includes("'\t=1+1"));
+  const withTracks = F('Plug', { tracks: ['Lead Vox'] });
+  assert.ok(!makeShareHtml([withTracks], { redact: true }).includes('Lead Vox'));
+  assert.ok(makeShareHtml([withTracks], { redact: false }).includes('Lead Vox'));
+  assert.ok(makeShareMarkdown([withTracks], { redact: false }).includes('Lead Vox'));
+});
+
+test('audit: ableton parser survives tag floods inside an .als', async () => {
+  const evil = new TextEncoder().encode('<Ableton Creator="x">' + '<!--'.repeat(50_000));
+  const t = Date.now();
+  const r = await analyzeBytes('evil.als', evil.length, evil);
+  assert.ok(Date.now() - t < 2000); assert.ok(Array.isArray(r.findings));
+});

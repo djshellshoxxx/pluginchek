@@ -62,3 +62,18 @@ export function matchInventory(findings, inventory, { db = null } = {}) {
     return setInstalled(f, 'missing');
   });
 }
+
+/**
+ * Turn webkitdirectory file paths into plugin entries. Folder pickers list files only, so bundles
+ * (Foo.vst3/Contents/..., Foo.component/..., Foo.clap) are detected by their directory segment and de-duplicated.
+ */
+export function pluginPathsFromFiles(paths) {
+  const out = new Set();
+  for (const raw of paths) {
+    const p = String(raw).replace(/\\/g, '/');
+    const bundle = /^(.*?\.(?:vst3|component|clap|aaxplugin|vst))(?:\/|$)/i.exec(p);
+    if (bundle) out.add(bundle[1]);
+    else if (/\.(dll|so|clap|vst3)$/i.test(p)) out.add(p);
+  }
+  return [...out];
+}

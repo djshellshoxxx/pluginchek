@@ -31,9 +31,12 @@ export function resolveMedia(media, available) {
 }
 
 /** Absolute candidate paths for desktop existence checks (project directory + relative path). */
+/** UNC / device paths could trigger network access (credential leak) when checked on Windows: never check them. */
+export const isUnsafePath = p => /^(\\\\|\/\/)/.test(String(p || ''));
+
 export function candidatePaths(media, projectDir) {
   const join = (d, r) => `${d.replace(/[\\/]+$/, '')}/${r.replace(/^[\\/]+/, '')}`;
-  return media.map(m => m.absPath || (projectDir && m.relPath ? join(projectDir, m.relPath) : ''));
+  return media.map(m => { const c = m.absPath || (projectDir && m.relPath ? join(projectDir, m.relPath) : ''); return isUnsafePath(c) || isUnsafePath(projectDir) ? '' : c; });
 }
 
 export function summarizeMedia(media) {
@@ -42,5 +45,5 @@ export function summarizeMedia(media) {
   return c;
 }
 
-const cell = v => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+import { csvCell as cell } from '../core/csv.js';
 export const makeMediaCsv = media => ['Path,Kind,Status,Source,Occurrences', ...media.map(m => [m.path, m.kind, m.status, m.source, m.occurrences].map(cell).join(','))].join('\n');
