@@ -1,19 +1,21 @@
 {
   "name": "pluginchek",
   "productName": "PluginChek",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Local DAW project plugin inspector",
-  "author": "Sheldon Davidson",
+  "author": "Sheldon Davidson <sheldon.davidson@gmail.com>",
+  "homepage": "https://github.com/djshellshoxxx/pluginchek",
   "license": "MIT",
   "private": true,
   "type": "module",
   "main": "desktop/main.js",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check parser-core.js && node --check app.js && node --check ui-assistance.js && node --check desktop/main.js",
+    "check": "node scripts/check-syntax.mjs && node scripts/db-validate.mjs",
     "start": "electron .",
     "dist:linux": "electron-builder --linux AppImage tar.gz",
-    "dist:win": "electron-builder --win portable nsis"
+    "dist:win": "electron-builder --win portable nsis",
+    "dist:mac": "electron-builder --mac dmg zip"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -22,10 +24,15 @@
   "build": {
     "appId": "com.circuitdriftlabs.pluginchek",
     "productName": "PluginChek",
-    "files": ["index.html", "app.js", "parser-core.js", "ui-assistance.js", "styles.css", "desktop/**", "LICENSE", "package.json"],
+    "files": ["index.html", "styles.css", "ui-assistance.js", "parser-core.js", "src/**/*.js", "desktop/**", "LICENSE", "package.json"],
     "directories": { "output": "dist" },
     "artifactName": "PluginChek-${version}-${os}-${arch}.${ext}",
+    "fileAssociations": [
+      { "ext": ["als"], "name": "Ableton Live Set", "role": "Viewer" },
+      { "ext": ["rpp", "rpp-bak"], "name": "REAPER Project", "role": "Viewer" }
+    ],
     "linux": { "category": "AudioVideo", "maintainer": "Sheldon Davidson <sheldon.davidson@gmail.com>" },
-    "win": { "target": ["portable", "nsis"] }
+    "win": { "target": ["portable", "nsis"], "signAndEditExecutable": false },
+    "mac": { "category": "public.app-category.music", "target": ["dmg", "zip"] }
   }
 }

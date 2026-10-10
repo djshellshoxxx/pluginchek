@@ -1,13 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <link rel="icon" href="data:,">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0E1116">
   <meta name="description" content="PluginChek by Circuit Drift Labs inspects supported DAW project files locally in your browser and identifies recoverable plugin references without uploading files.">
   <title>PluginChek — Circuit Drift Labs</title>
   <link rel="stylesheet" href="styles.css">
-  <script type="module" src="app.js"></script>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <script type="module" src="src/ui/main.js"></script>
   <!-- SEO: Circuit Drift Labs -->
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="https://djshellshoxxx.github.io/pluginchek/">
@@ -46,7 +48,7 @@
 <header class="topbar">
   <a class="brand" href="https://djshellshoxxx.github.io/circuitdriftlabs/" target="_blank" rel="noopener noreferrer"><span class="brand-mark"></span><span>CIRCUIT <b>DRIFT</b> <small>LAB</small></span></a>
   <div class="product-name"><strong>PluginChek</strong><span>PROJECT PLUGIN INSPECTOR</span></div>
-  <div class="header-actions"><span class="local-badge"><i></i> LOCAL ANALYSIS</span><a href="https://github.com/djshellshoxxx/pluginchek" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
+  <div class="header-actions"><button id="themeBtn" class="button outline" type="button" data-help="Switch between dark, light and system theme.">Theme</button><span class="local-badge"><i></i> LOCAL ANALYSIS</span><a href="https://github.com/djshellshoxxx/pluginchek" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div>
 </header>
 <main id="main">
 <section class="hero">
@@ -64,15 +66,17 @@
     <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Drop DAW project files or browse">
       <div class="drop-icon">⌁</div><strong>Drop project files here</strong><span>.als .rpp .flp .song .bwproject .cpr .npr .ptx .logicx .band .reason .zip + unknown binaries</span>
       <button id="browseBtn" class="button primary" type="button">Browse files</button>
+      <button id="batchBtn" class="button outline hidden" type="button">Scan a folder of projects</button>
       <input id="fileInput" type="file" multiple hidden>
     </div>
+    <div id="progress" class="progress hidden" role="status"><progress id="progressBar" max="100" value="0"></progress><span id="progressText"></span><button id="cancelBtn" class="button danger" type="button">Cancel</button></div>
     <p class="privacy-note"><b>Local by design.</b> Files are read with browser APIs and are not uploaded by PluginChek.</p>
   </div>
 
   <div class="panel inventory-panel">
     <div class="section-title"><span></span><div><small>02 / OPTIONAL CROSS-CHECK</small><h2>Installed plugin inventory</h2></div></div>
     <p>Select your VST/AU/AAX/CLAP plugin folder, or provide an exported text/CSV/JSON file list. PluginChek compares project references against filenames and paths.</p>
-    <div class="button-row"><label class="button outline">Select plugin folder<input id="inventoryFolder" type="file" webkitdirectory multiple hidden></label><label class="button outline">Load inventory file<input id="inventoryFile" type="file" accept=".txt,.csv,.json" hidden></label></div>
+    <div class="button-row"><button id="scanPcBtn" class="button primary hidden" type="button">Scan this computer</button><label class="button outline">Select plugin folder<input id="inventoryFolder" type="file" webkitdirectory multiple hidden></label><label class="button outline">Load inventory file<input id="inventoryFile" type="file" accept=".txt,.csv,.json" hidden></label></div>
     <div id="inventoryStatus" class="mini-status">No inventory loaded</div>
     <details class="advanced"><summary>Advanced scan options</summary><div class="advanced-grid"><label>Min string length <input id="minString" type="number" min="3" max="32" value="5"></label><label><input id="deepScan" type="checkbox" checked> Deep archive scan</label><label><input id="lowConfidence" type="checkbox" checked> Show low-confidence evidence</label><label><input id="keepEvidence" type="checkbox" checked> Keep raw evidence</label></div></details>
   </div>
@@ -80,14 +84,45 @@
 
 <section id="workspace" class="workspace hidden" aria-live="polite">
   <div class="workspace-head"><div><span class="kicker">03 / ANALYSIS</span><h2>Project dependency report</h2></div><div class="button-row"><button id="copyBtn" class="button outline">Copy summary</button><button id="resetBtn" class="button danger">Reset</button></div></div>
+  <div id="verdict" class="verdict unknown" role="status"></div>
   <div id="riskBanner" class="risk-banner"></div>
   <div id="summary" class="summary-grid"></div>
 
   <div class="panel results-panel">
     <div class="section-title"><span></span><div><small>PLUGIN REFERENCES</small><h2>Recovered plugins</h2></div></div>
-    <div class="filters"><input id="search" type="search" placeholder="Search plugin, vendor, category…"><select id="formatFilter"><option value="">All formats</option></select><select id="confidenceFilter"><option value="">All confidence</option><option>high</option><option>medium</option><option>low</option></select><select id="installedFilter"><option value="">All install states</option><option>matched</option><option>possible match</option><option>not found</option><option>inventory not supplied</option></select></div>
+    <div class="filters"><input id="search" type="search" placeholder="Search plugin, vendor, category…"><select id="formatFilter"><option value="">All formats</option></select><select id="confidenceFilter"><option value="">All confidence</option><option>high</option><option>medium</option><option>low</option></select><select id="installedFilter"><option value="">All install states</option><option value="matched">matched</option><option value="possible">possible match</option><option value="missing">not found</option><option value="unknown">inventory not supplied</option></select></div>
+    <div class="toggle-row"><label><input id="problemsOnly" type="checkbox"> Problems only</label><label><input id="showStock" type="checkbox"> Show built-in DAW devices</label><span class="legend" id="confLegend" tabindex="0">What do confidence levels mean?</span></div>
     <div id="pluginList" class="plugin-list"></div>
   </div>
+
+  
+  <div class="panel hidden" id="panel-media"><div class="section-title"><span></span><div><small>PROJECT MEDIA</small><h2>Audio and sample files</h2></div></div>
+    <p>Referenced audio files, checked against a project folder you choose (nothing is uploaded).</p>
+    <div class="button-row"><label class="button outline">Select project folder<input id="projectFolder" type="file" webkitdirectory multiple hidden></label><button id="mediaCsvBtn" class="button outline" type="button">Export media CSV</button><label><input id="mediaProblems" type="checkbox" checked> Missing only</label></div>
+    <div id="mediaSummary" class="mini-status"></div><div id="mediaList" class="media-list"></div></div>
+
+  <div class="panel hidden" id="panel-compat"><div class="section-title"><span></span><div><small>MOVING SYSTEMS</small><h2>Compatibility and alternatives</h2></div></div>
+    <div class="button-row"><label>Target system <select id="targetOs"><option value="win">Windows</option><option value="mac">macOS</option><option value="linux">Linux</option></select></label><label>CPU <select id="targetArch"><option value="x64">Intel / AMD (x64)</option><option value="arm64">Apple Silicon / ARM</option></select></label></div>
+    <div id="compatSummary" class="mini-status"></div><div id="compatList" class="compat-list"></div></div>
+
+  <div class="split-grid">
+    <div class="panel" id="panel-compare"><div class="section-title"><span></span><div><small>VERSIONS</small><h2>Compare projects</h2></div></div>
+      <p>Save the current plugin list as a snapshot, then load it later (or another project's snapshot) to see what changed.</p>
+      <div class="button-row"><button id="snapBtn" class="button outline" type="button">Save snapshot</button><label class="button outline">Compare with snapshot<input id="snapFile" type="file" accept=".json" hidden></label><button id="diffMdBtn" class="button outline hidden" type="button">Export diff</button></div>
+      <div id="diffOut" class="diff-out"></div></div>
+    <div class="panel" id="panel-share"><div class="section-title"><span></span><div><small>SHARE</small><h2>What you need to open this</h2></div></div>
+      <p>Create a clean list to send to a collaborator. Paths and track names are removed by default.</p>
+      <label><input id="redact" type="checkbox" checked> Remove track names and paths</label>
+      <div class="button-row"><button data-share="html" class="button outline" type="button">HTML page</button><button data-share="md" class="button outline" type="button">Markdown</button><button data-share="print" class="button outline" type="button">Print / PDF</button></div></div>
+  </div>
+
+  <div class="panel hidden" id="panel-stats"><div class="section-title"><span></span><div><small>ACROSS PROJECTS</small><h2>Plugin usage statistics</h2></div></div>
+    <div id="statsOut" class="stats-out"></div><div class="button-row"><button id="statsCsvBtn" class="button outline" type="button">Export stats CSV</button></div></div>
+
+  <div class="panel" id="panel-fun"><div class="section-title"><span></span><div><small>EXTRAS</small><h2>Your plugin stack</h2></div></div>
+    <ul id="personality" class="personality"></ul>
+    <div class="button-row"><button id="cardBtn" class="button outline" type="button">Save project card (PNG)</button><button id="wishBtn" class="button outline" type="button">Export wishlist</button></div>
+    <h3>Recovery wizard</h3><ol id="wizard" class="wizard"></ol></div>
 
   <div class="split-grid">
     <div class="panel"><div class="section-title"><span></span><div><small>FILE INSPECTOR</small><h2>What was scanned</h2></div></div><div id="fileList" class="file-list"></div></div>
@@ -100,7 +135,7 @@
   <p>Some DAWs store readable XML or text. Others use proprietary binary formats. PluginChek uses format-aware decoding for known containers, then falls back to printable-string and plugin-signature analysis. Each finding shows confidence and evidence so you can see what was recovered rather than trust a black box.</p>
 </section>
 </main>
-<footer><a href="https://djshellshoxxx.github.io/circuitdriftlabs/">← Circuit Drift Lab</a><span>PluginChek / browser utility / v1.0</span></footer>
+<footer><a href="https://djshellshoxxx.github.io/circuitdriftlabs/">← Circuit Drift Lab</a><span>PluginChek / browser utility / v0.1.0-beta.1</span></footer>
 </div>
 <script type="module" src="./ui-assistance.js"></script>
 </body>
