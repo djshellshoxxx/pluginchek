@@ -26,4 +26,4 @@ Independent review found and I fixed: quadratic regex/XML scanning (hostile proj
 ## Needed next (cannot be done without you)
 1. Real anonymised `.als` / `.rpp` files (and other DAWs) to replace the synthetic fixtures and confirm element names.
 2. Code-signing certificates (Windows) and an Apple Developer account.
-3. A run of the Windows build on a real Windows machine: the `.exe` was cross-built on Linux and has **not been executed**.
+3. A run of the Windows build on a real Windows machine: the portable `.exe` was cross-built on Linux (`npm run dist:win:portable`) and has **not been executed**. The Windows installer (NSIS) needs Wine on Linux, so it is produced only by the `Desktop beta build` workflow on a Windows runner (not yet run).
