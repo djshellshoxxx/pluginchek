@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ableton MajorVersion="5" MinorVersion="11.0_11202" Creator="Ableton Live 11.2.5">
+<LiveSet><Tracks>
+<AudioTrack Id="1"><Name><EffectiveName Value="Vocals"/><UserName Value=""/></Name>
+ <DeviceChain><Devices>
+  <Eq8 Id="0"><On><Manual Value="true"/></On></Eq8>
+  <PluginDevice Id="1"><PluginDesc><Vst3PluginInfo Id="0"><Name Value="Pro-Q 3"/><Uid><Fields.0 Value="1"/><Fields.1 Value="2"/><Fields.2 Value="3"/><Fields.3 Value="4"/></Uid></Vst3PluginInfo></PluginDesc></PluginDevice>
+ </Devices></DeviceChain>
+ <MainSequencer><ClipTimeable><ArrangerAutomation><Events><AudioClip Id="3"><Name><EffectiveName Value="Clip1"/></Name><SampleRef><FileRef><RelativePathType Value="3"/><RelativePath Value="Samples/Imported/vocal.wav"/><Path Value="/Users/me/Project/Samples/Imported/vocal.wav"/></FileRef></SampleRef></AudioClip></Events></ArrangerAutomation></ClipTimeable></MainSequencer>
+</AudioTrack>
+<MidiTrack Id="2"><Name><EffectiveName Value="Lead"/></Name>
+ <DeviceChain><Devices>
+  <PluginDevice Id="4"><PluginDesc><VstPluginInfo Id="0"><Path Value="C:\VST\Serum_x64.dll"/><PlugName Value="Serum"/><UniqueId Value="1484571501"/></VstPluginInfo></PluginDesc></PluginDevice>
+  <PluginDevice Id="5"><PluginDesc><AuPluginInfo Id="0"><Name Value="AUDelay"/><Manufacturer Value="Apple"/></AuPluginInfo></PluginDesc></PluginDevice>
+ </Devices></DeviceChain>
+</MidiTrack>
+<MidiTrack Id="6"><Name><EffectiveName Value="Bass"/></Name>
+ <DeviceChain><Devices>
+  <PluginDevice Id="7"><PluginDesc><VstPluginInfo Id="0"><Path Value="C:\VST\Serum_x64.dll"/><PlugName Value="Serum"/><UniqueId Value="1484571501"/></VstPluginInfo></PluginDesc></PluginDevice>
+ </Devices></DeviceChain>
+</MidiTrack>
+</Tracks></LiveSet></Ableton>

@@ -1,0 +1,18 @@
+<REAPER_PROJECT 0.1 "6.80/win64" 1700000000
+  <TRACK
+    NAME "Guitar"
+    <FXCHAIN
+      <VST "VST3: Pro-Q 3 (FabFilter)" "FabFilter Pro-Q 3.vst3" 0 "" 1180076084{AAAABBBBCCCCDDDDEEEEFFFF00001111} ""
+        QUJDRA==
+      >
+      <VST "VST: ReaComp (Cockos)" reacomp.dll 0 "" 1919247729<5653545243> ""
+      >
+      <JS "utility/volume" "Volume Adjustment"
+      >
+    >
+    <ITEM
+      <SOURCE WAVE
+        FILE "Media/guitar take 1.wav"
+      >
+    >
+  >
