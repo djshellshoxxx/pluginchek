@@ -226,10 +226,13 @@ export function mergePluginFindings(findings) {
 }
 
 export function matchInventory(findings, inventoryPaths = []) {
-  const inv = inventoryPaths.map(path => ({ path, key: keyFor(path.split(/[\\/]/).pop()) }));
+  const inv = inventoryPaths.map(path => ({
+    path,
+    key: keyFor(path.split(/[\\/]/).pop().replace(/\.(vst3|vst|component|aaxplugin|clap|dll)$/i, '')),
+  }));
   return (findings || []).map(f => {
     const key = keyFor(f.name);
-    const exact = inv.find(i => i.key === key || (key.length >= 5 && i.key.length >= 5 && (i.key.includes(key) || key.includes(i.key))));
+    const exact = inv.find(i => key && i.key === key);
     if (exact) return { ...f, installedStatus: 'matched', inventoryMatch: exact.path };
     const tokens = normalizeName(f.name).toLowerCase().split(' ').filter(t => t.length > 2);
     const possible = inv.find(i => tokens.length >= 2 && tokens.filter(t => i.key.includes(t.replace(/[^a-z0-9]/g, ''))).length >= Math.min(2, tokens.length));

@@ -93,3 +93,15 @@ test('builds a recovery checklist containing missing and possible matches only',
   assert.match(text, /1 missing/);
   assert.match(text, /1 possible match/);
 });
+
+test('inventory matches plugin name exactly after removing the plugin extension', () => {
+  const findings = [{ name: 'Serum', format: 'VST3' }];
+  const exact = matchInventory(findings, ['C:/Plugins/Serum.vst3']);
+  assert.equal(exact[0].installedStatus, 'matched');
+});
+
+test('similar but different product names are uncertain, not confirmed matches', () => {
+  const findings = [{ name: 'Serum', format: 'VST3' }];
+  const similar = matchInventory(findings, ['C:/Plugins/SerumFX.vst3']);
+  assert.notEqual(similar[0].installedStatus, 'matched');
+});
