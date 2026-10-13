@@ -226,14 +226,45 @@ export function mergePluginFindings(findings) {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Plugin names alone cannot prove that the required binary format is installed.
+function inventoryFormat(path) {
+  const name = String(path).split(/[\\\\/]/).pop().toLowerCase();
+  if (name.endsWith('.vst3')) return 'VST3';
+  if (name.endsWith('.vst') || name.endsWith('.dll')) return 'VST2';
+  if (name.endsWith('.component')) return 'AU';
+  if (name.endsWith('.aaxplugin')) return 'AAX';
+  if (name.endsWith('.clap')) return 'CLAP';
+  return 'Unknown';
+}
+
+function formatMatches(expected, actual) {
+  const requested = String(expected || 'Unknown').toUpperCase();
+  if (requested === 'UNKNOWN') return true;
+  const accepted = [];
+  if (requested.includes('VST3')) accepted.push('VST3');
+  if (requested.includes('VST2') || requested === 'VST' || requested.includes('VST /')) accepted.push('VST2');
+  if (requested === 'AU' || requested === 'AUDIO UNIT') accepted.push('AU');
+  if (requested === 'AAX') accepted.push('AAX');
+  if (requested === 'CLAP') accepted.push('CLAP');
+  return accepted.length ? accepted.includes(actual) : actual === 'Unknown';
+}
+
 export function matchInventory(findings, inventoryPaths = []) {
-  const inv = inventoryPaths.map(path => ({ path, key: keyFor(path.split(/[\\/]/).pop()) }));
+  const inv = inventoryPaths.map(path => ({
+    path,
+    key: keyFor(String(path).split(/[\\\\/]/).pop()),
+    format: inventoryFormat(path),
+  }));
   return (findings || []).map(f => {
     const key = keyFor(f.name);
-    const exact = inv.find(i => i.key === key || (key.length >= 5 && i.key.length >= 5 && (i.key.includes(key) || key.includes(i.key))));
+    const sameName = inv.filter(i => key && i.key === key);
+    const exact = sameName.find(i => formatMatches(f.format, i.format));
     if (exact) return { ...f, installedStatus: 'matched', inventoryMatch: exact.path };
+    // A differently packaged plugin may work with some hosts but is not a confirmed match.
+    if (sameName.length) return { ...f, installedStatus: 'possible match', inventoryMatch: sameName[0].path };
     const tokens = normalizeName(f.name).toLowerCase().split(' ').filter(t => t.length > 2);
-    const possible = inv.find(i => tokens.length >= 2 && tokens.filter(t => i.key.includes(t.replace(/[^a-z0-9]/g, ''))).length >= Math.min(2, tokens.length));
+    const possible = inv.find(i => tokens.length >= 2
+      && tokens.filter(t => i.key.includes(t.replace(/[^a-z0-9]/g, ''))).length >= Math.min(2, tokens.length));
     if (possible) return { ...f, installedStatus: 'possible match', inventoryMatch: possible.path };
     return { ...f, installedStatus: inventoryPaths.length ? 'not found' : 'inventory not supplied' };
   });
