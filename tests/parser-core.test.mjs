@@ -111,3 +111,33 @@ test('one REAPER VST line yields one plugin (no filename/arch duplicates)', () =
   const names = _mg(_an(t, { source: 't', daw: 'REAPER', confidence: 'high' })).map(f => f.name);
   assert.equal(names.length, 2, names.join(' | '));
 });
+
+
+test('matching inventory requires the requested plugin format', () => {
+  const project = [{ name: 'Serum', format: 'VST3' }];
+  const vst2Only = matchInventory(project, ['C:/Plugins/Serum.dll']);
+  assert.equal(vst2Only[0].installedStatus, 'possible match');
+  assert.equal(vst2Only[0].inventoryMatch, 'C:/Plugins/Serum.dll');
+
+  const correct = matchInventory(project, ['C:/Plugins/Serum.dll', 'C:/Plugins/Serum.vst3']);
+  assert.equal(correct[0].installedStatus, 'matched');
+  assert.equal(correct[0].inventoryMatch, 'C:/Plugins/Serum.vst3');
+
+  assert.equal(matchInventory([{ name: 'Serum', format: 'VST2 / VST' }], ['Serum.dll'])[0].installedStatus, 'matched');
+  assert.equal(matchInventory([{ name: 'Serum', format: 'AU' }], ['Serum.component'])[0].installedStatus, 'matched');
+  assert.equal(matchInventory([{ name: 'Serum', format: 'CLAP' }], ['Serum.clap'])[0].installedStatus, 'matched');
+});
+
+test('substring-identical plugin product names are never confirmed as installed', () => {
+  const result = matchInventory([{ name: 'Serum', format: 'VST3' }], ['C:/Plugins/SerumFX.vst3']);
+  assert.notEqual(result[0].installedStatus, 'matched');
+
+  const reverse = matchInventory([{ name: 'SerumFX', format: 'VST3' }], ['C:/Plugins/Serum.vst3']);
+  assert.notEqual(reverse[0].installedStatus, 'matched');
+});
+
+test('inventory without a plugin format remains uncertain for format-specific projects', () => {
+  const result = matchInventory([{ name: 'Serum', format: 'VST3' }], ['C:/Plugins/Serum']);
+  assert.equal(result[0].installedStatus, 'possible match');
+  assert.equal(matchInventory([{ name: 'Serum', format: 'Unknown' }], ['C:/Plugins/Serum'])[0].installedStatus, 'matched');
+});
