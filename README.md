@@ -27,5 +27,9 @@ python -m http.server 8000
 
 Then open `http://localhost:8000`.
 
+## Wiki
+
+Wiki source pages are in [docs/wiki/](docs/wiki/Home.md): user guide, developer guide, architecture rationale and codebase map.
+
 ## Privacy
 Project files are processed in the browser. PluginChek itself does not upload project/session contents or send them to a server.
